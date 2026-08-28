@@ -1,30 +1,19 @@
 function main(config) {
   config = config || {};
 
-  // Mihomo v1.19.29+ 安全版：
-  // 对要求“不发送 SNI”的 AnyTLS 节点，分离 SNI 与证书校验域名，
-  // 在隐藏 SNI 的同时保留证书校验。
-  // 策略优化：显示兜底组；微软、苹果、B站和国内网站直连优先。
-  // AI/Google 优化：严格服务分离测试版。仅真正的 Gemini/Antigravity 进入 Gemini；YouTube、Google Drive、普通 Google 分别独立；Google IP 统一回到 Google。
-  // V8：AI 与海外服务分组直接展开全部实际节点，便于逐节点 A/B 测试；入口/地区/默认直连组保持精简。
-  // V9：为 Sub-Store/Clash Party 远程文件拉取增加 Fake-IP 排除，避免 198.18.x.x:443 超时。
-  // V10：Gemini 统一改用 MetaCubeX google-gemini.mrs；Drive 收窄为 3 个明确域名；DNS 增加代理/直连双层冗余。
-  // V11：精简低频策略组；Copilot/Perplexity/Grok 并入 AI；保留 Instagram/Pinterest；策略组改为名称 + 彩色图标。
-  // V12：地区组改为 香港→美国→日本→新加坡→台湾→其它地区；服务组选项精简；图标切换为 Alpha 透明轻量风。
-  // V13：修正 Alpha 白色图标在浅色界面不可见的问题，改为透明底彩色图标。
-  // V14：所有策略组图标统一到 Oasisic-Icons 单一来源；Pinterest 使用同源通用搜索图标。
-  // 链式代理：住宅 SOCKS 直接显示在 Proxy；仅存在住宅 SOCKS 时显示“机场入口”。
-  // 入口只接受名称含 🍃/🌏 + 美国/美國/香港 的普通节点；不再创建“🛬 落地节点”分组。
-  // 顺序策略：所有实际节点组均使用显式 proxies 列表，保持 Sub-Store 最终顺序。
-  // 空组保护：所有策略组都保证至少一个成员；入口全不可用时也回退到 REJECT。
-  // 兜底整理：仅删除实际连接配置完全相同的节点，并处理残余重名与保留名称冲突。
-  // 常用服务：增加社交、云盘、办公、游戏和流媒体的独立规则集与策略组。
-  // DNS/TUN：关闭 Mihomo IPv6，启用严格路由，并让主 DNS 通过 Proxy 出口。
+  // Mihomo / Clash Party 精简维护版：
+  // - 保留：节点精确去重、同名重命名、策略组重名保护、地区分类、住宅 SOCKS 链式代理。
+  // - 保留：AI / Gemini / Google / YouTube 等核心分流、TUN、Sniffer、Fake-IP、双层 DNS。
+  // - 保留：有住宅 SOCKS 时才显示“机场入口”；入口仅接受指定 🍃/🌏 + 美国/美國/香港 节点。
+  // - 精简：移除 AnyTLS No-SNI 兼容补丁、自动 Chrome TLS 指纹、MetaCubeXD 下载、
+  //         find-process-mode、unified-delay，以及大量不再单独控制的低频 RULE-SET。
+  // - 图标：统一改为用户自己的 GitHub 仓库，避免第三方图标源变更。
+  // - V16：规则模式 Global 改名为“国际”；显式增加 GLOBAL 全局模式选择器并使用独立图标。
+
 
   // 节点由 Sub-Store 的组合订阅注入到 config.proxies，
   // 因此删除外部 proxy-providers，避免重复加载。
   delete config["proxy-providers"];
-  delete config["global-client-fingerprint"];
 
   // 统一使用 Mihomo 内置 DIRECT。
   var directName = "DIRECT";
@@ -66,7 +55,7 @@ function main(config) {
     "TikTok",
     "Netflix",
     "Spotify",
-    "Global",
+    "国际",
     "Microsoft",
     "Apple",
     "Bilibili",
@@ -143,42 +132,8 @@ function main(config) {
     var originalName = String(item.name);
     var proxyType = String(item.type || "").toLowerCase();
 
-    // Sub-Store 会将部分 AnyTLS 节点的“不发送 SNI”转换为：
-    // sni: 127.0.0.1 + disable-sni: true。
-    // Mihomo AnyTLS 不读取 disable-sni；v1.19.29+ 可使用
-    // name-cert-verify 单独指定证书校验域名。
-    if (proxyType === "anytls") {
-      var disableSniValue = item["disable-sni"];
-      var disableSni =
-        disableSniValue === true ||
-        disableSniValue === 1 ||
-        String(disableSniValue).toLowerCase() === "true" ||
-        String(disableSniValue) === "1";
-      var usesNoSniSentinel = String(item.sni || "").trim() === "127.0.0.1";
-      var needsNoSniCompatibility = disableSni || usesNoSniSentinel;
-
-      delete item["disable-sni"];
-
-      if (needsNoSniCompatibility) {
-        item.sni = "127.0.0.1";
-        if (!item["name-cert-verify"] && item.server) {
-          item["name-cert-verify"] = String(item.server);
-        }
-      }
-    }
-
     // 订阅中的 direct 节点不保留，统一使用 Mihomo 内置 DIRECT。
     if (proxyType === "direct") continue;
-
-    // 仅为适用且未设置指纹的节点补充 Chrome 指纹。
-    var supportsClientFingerprint =
-      proxyType === "vmess" ||
-      proxyType === "vless" ||
-      proxyType === "trojan";
-
-    if (supportsClientFingerprint && !item["client-fingerprint"]) {
-      item["client-fingerprint"] = "chrome";
-    }
 
     // 名称含“住宅”且类型为 SOCKS/SOCKS5 的节点作为最终出口，
     // 通过“机场入口”建立第一跳。
@@ -375,15 +330,8 @@ function main(config) {
   config["mixed-port"] = 7890;
   config.ipv6 = false;
   config["allow-lan"] = false;
-  config["unified-delay"] = false;
   config["tcp-concurrent"] = true;
   config["external-controller"] = "127.0.0.1:9090";
-  config["external-ui"] = "ui";
-  config["external-ui-url"] =
-    "https://github.com/MetaCubeX/metacubexd/archive/refs/heads/gh-pages.zip";
-
-  config["find-process-mode"] = "strict";
-
   config.profile = {
     "store-selected": true,
     "store-fake-ip": true
@@ -404,7 +352,6 @@ function main(config) {
       }
     },
     "skip-domain": [
-      "Mijia Cloud",
       "+.push.apple.com"
     ]
   };
@@ -547,8 +494,8 @@ function main(config) {
   proxyGroups.push(createSelectGroup("Netflix", foreignServiceProxyList()));
   proxyGroups.push(createSelectGroup("Spotify", foreignServiceProxyList()));
 
-  // 其它低频海外服务规则继续存在，但统一进入 Global，不再单独占策略卡片。
-  proxyGroups.push(createSelectGroup("Global", foreignServiceProxyList()));
+  // 未单独建组的海外流量最终由 geolocation-!cn 进入“国际”。
+  proxyGroups.push(createSelectGroup("国际", foreignServiceProxyList()));
 
   // Microsoft / Apple / Bilibili / 国内默认直连。
   proxyGroups.push(createSelectGroup("Microsoft", domesticServiceProxyList()));
@@ -600,63 +547,65 @@ function main(config) {
     createSelectGroup(fallbackGroupName, foreignServiceProxyList())
   );
 
+  // ===== Mihomo 全局模式选择器 =====
+  // 与规则模式下的“国际”分组不同：
+  // - 国际：仅用于规则模式下 geolocation-!cn 的国外流量。
+  // - GLOBAL：Clash Party / Mihomo 切换到 Global 模式时使用的总出口选择器。
+  // 提供主代理、地区组、全部实际节点和 DIRECT，便于全局模式下快速切换。
+  proxyGroups.push({
+    name: "GLOBAL",
+    type: "select",
+    proxies: ["Proxy", "香港", "美国", "日本", "新加坡", "台湾", "其它地区"]
+      .concat(allProxyNames)
+      .concat([directName])
+  });
+
 
   // ===== 策略组图标 =====
-  // V14：全部统一使用 Oasisic-Icons 单一来源。
-  // 这样品牌、功能、地区图标的路径、风格和维护源统一，减少多仓库失效问题。
+  // 图标全部托管在用户自己的 GitHub 仓库。
+  // 仓库：https://github.com/love-iu520/substore-config
   var iconBase =
-    "https://cdn.jsdelivr.net/gh/Hawaiine/Oasisic-Icons@main/icons/";
+    "https://raw.githubusercontent.com/love-iu520/substore-config/main/icons/";
 
   var groupIcons = {
-    // 功能组
-    "Proxy": iconBase + "General/Lightning-1.png",
-    "机场入口": iconBase + "Proxy/IEPL.png",
-    "AI": iconBase + "AI/AI.png",
+    "Proxy": iconBase + "Proxy.png",
+    "机场入口": iconBase + "Airport-Entry.png",
+    "AI": iconBase + "AI.png",
 
-    // AI
-    "OpenAI": iconBase + "AI/OpenAI-1.png",
-    "Claude": iconBase + "AI/Anthropic-1.png",
-    "Gemini": iconBase + "Google/Gemini.png",
+    "OpenAI": iconBase + "OpenAI.png",
+    "Claude": iconBase + "Claude.png",
+    "Gemini": iconBase + "Gemini.png",
 
-    // Google 系
-    "Google Drive": iconBase + "Google/GoogleDrive.png",
-    "YouTube": iconBase + "Media/YouTube-1.png",
-    "Google": iconBase + "Google/Google-1.png",
+    "Google Drive": iconBase + "Google-Drive.png",
+    "YouTube": iconBase + "YouTube.png",
+    "Google": iconBase + "Google.png",
 
-    // 开发 / 社交
-    "GitHub": iconBase + "Tool/GitHub-1.png",
-    "Telegram": iconBase + "Social/Telegram-1.png",
-    "Twitter": iconBase + "Social/X-1.png",
-    "Discord": iconBase + "Social/Discord-1.png",
-    "Instagram": iconBase + "Social/Instagram-1.png",
+    "GitHub": iconBase + "GitHub.png",
+    "Telegram": iconBase + "Telegram.png",
+    "Twitter": iconBase + "Twitter.png",
+    "Discord": iconBase + "Discord.png",
+    "Instagram": iconBase + "Instagram.png",
+    "Pinterest": iconBase + "Pinterest.png",
+    "TikTok": iconBase + "TikTok.png",
 
-    // Oasisic 当前没有 Pinterest 专属图标；
-    // 使用同仓库的搜索/发现类图标，避免引入第二个图标源。
-    "Pinterest": iconBase + "General/Search-1.png",
+    "Netflix": iconBase + "Netflix.png",
+    "Spotify": iconBase + "Spotify.png",
 
-    "TikTok": iconBase + "Social/TikTok-1.png",
+    "Microsoft": iconBase + "Microsoft.png",
+    "Apple": iconBase + "Apple.png",
+    "Bilibili": iconBase + "Bilibili.png",
+    "国内网站": iconBase + "China.png",
+    "国际": iconBase + "International.png",
+    "GLOBAL": iconBase + "GLOBAL.png",
 
-    // 流媒体
-    "Netflix": iconBase + "Media/Netflix-1.png",
-    "Spotify": iconBase + "Music/Spotify-1.png",
+    "香港": iconBase + "Hong-Kong.png",
+    "美国": iconBase + "United-States.png",
+    "日本": iconBase + "Japan.png",
+    "新加坡": iconBase + "Singapore.png",
+    "台湾": iconBase + "Taiwan.png",
+    "其它地区": iconBase + "Other-Regions.png",
 
-    // 系统 / 国内 / 全局
-    "Microsoft": iconBase + "Microsoft/Microsoft-1.png",
-    "Apple": iconBase + "Apple/Apple-1.png",
-    "Bilibili": iconBase + "Media/Bilibili-1.png",
-    "国内网站": iconBase + "Country/China.png",
-    "Global": iconBase + "General/Global-1.png",
-
-    // 地区
-    "香港": iconBase + "Country/HongKong.png",
-    "美国": iconBase + "Country/US.png",
-    "日本": iconBase + "Country/Japan.png",
-    "新加坡": iconBase + "Country/Singapore.png",
-    "台湾": iconBase + "Country/CN-Taiwan.png",
-    "其它地区": iconBase + "General/Area.png",
-
-    // 兜底
-    "兜底策略": iconBase + "General/Traffic-1.png"
+    "兜底策略": iconBase + "Fallback.png"
   };
 
   for (var gi = 0; gi < proxyGroups.length; gi++) {
@@ -699,7 +648,7 @@ function main(config) {
     // iOS Gemini 客户端；注意它不是 robinfrontend-pa 的子域，而是以连字符开头的新主机名。
     "DOMAIN,webchannel-robinfrontend-pa.googleapis.com,Gemini",
 
-    // Microsoft Copilot + GitHub Copilot
+    // Microsoft Copilot + GitHub Copilot：显式核心域名；其它遗漏由海外 AI 总规则兜底。
     "DOMAIN-SUFFIX,copilot.microsoft.com,AI",
     "DOMAIN-SUFFIX,copilot.cloud.microsoft,AI",
     "DOMAIN-SUFFIX,copilot.com,AI",
@@ -708,7 +657,6 @@ function main(config) {
     "DOMAIN,copilot-proxy.githubusercontent.com,AI",
     "DOMAIN,copilot-workspace.githubnext.com,AI",
     "DOMAIN,copilotprodattachments.blob.core.windows.net,AI",
-    "RULE-SET,copilot_domain,AI",
 
     // 其它常用 AI 独立组
     "DOMAIN-SUFFIX,perplexity.ai,AI",
@@ -736,24 +684,13 @@ function main(config) {
 
     // YouTube 仍必须位于 Google 大规则之前。
     "RULE-SET,youtube_domain,YouTube",
-    "RULE-SET,onedrive_domain,Microsoft",
-    "RULE-SET,teams_domain,Microsoft",
 
-    // 社交 / 通讯 / 社区。Instagram、WhatsApp 放在 Facebook 大规则之前。
-    "RULE-SET,whatsapp_domain,Global",
+    // 社交 / 通讯：只保留仍需独立控制的 Instagram。
     "RULE-SET,instagram_domain,Instagram",
-    "RULE-SET,facebook_domain,Global",
-    "RULE-SET,reddit_domain,Global",
-    "RULE-SET,twitch_domain,Global",
-    "RULE-SET,slack_domain,Global",
-    "RULE-SET,notion_domain,Global",
-    "RULE-SET,dropbox_domain,Global",
 
-    // 游戏与流媒体。
+    // 游戏：不显示独立策略组，但保留原有 DIRECT 行为。
     "RULE-SET,steam_domain,DIRECT",
     "RULE-SET,epic_domain,DIRECT",
-    "RULE-SET,disney_domain,Global",
-    "RULE-SET,primevideo_domain,Global",
 
     // GitHub：显式覆盖网页、资源域名和 SSH-over-443 主机，再进入完整 GitHub 规则集。
     "DOMAIN,ssh.github.com,GitHub",
@@ -772,21 +709,16 @@ function main(config) {
     "RULE-SET,discord_domain,Discord",
     "RULE-SET,pinterest_domain,Pinterest",
 
-    // Behance 主站、图片和项目资源均位于 behance.net 子域。
-    "DOMAIN-SUFFIX,behance.net,Global",
-    "DOMAIN-SUFFIX,behance.com,Global",
-
     "RULE-SET,tiktok_domain,TikTok",
     "RULE-SET,netflix_domain,Netflix",
     "RULE-SET,spotify_domain,Spotify",
-    "RULE-SET,bahamut_domain,Global",
 
     // 国内软件。
     "RULE-SET,bilibili_domain,Bilibili",
 
-    // 国内域名默认 DIRECT；国外域名默认 Proxy。
+    // 国内域名进入国内网站；未单独命中的国外域名进入“国际”。
     "RULE-SET,cn_domain,国内网站",
-    "RULE-SET,geolocation-!cn,Global",
+    "RULE-SET,geolocation-!cn,国际",
 
     // IP 规则。
     // Google IP 兜底统一回到 Google。
@@ -851,49 +783,11 @@ function main(config) {
       "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/category-ai-!cn.mrs"
     ),
 
-    copilot_domain: classicalProvider(
-      "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Copilot/Copilot.yaml"
-    ),
-
-    onedrive_domain: classicalProvider(
-      "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/OneDrive/OneDrive.yaml"
-    ),
-
-    teams_domain: classicalProvider(
-      "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Teams/Teams.yaml"
-    ),
-
-    whatsapp_domain: classicalProvider(
-      "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Whatsapp/Whatsapp.yaml"
-    ),
 
     instagram_domain: classicalProvider(
       "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Instagram/Instagram.yaml"
     ),
 
-    facebook_domain: classicalProvider(
-      "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Facebook/Facebook.yaml"
-    ),
-
-    reddit_domain: classicalProvider(
-      "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Reddit/Reddit.yaml"
-    ),
-
-    twitch_domain: classicalProvider(
-      "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Twitch/Twitch.yaml"
-    ),
-
-    slack_domain: classicalProvider(
-      "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Slack/Slack.yaml"
-    ),
-
-    notion_domain: classicalProvider(
-      "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Notion/Notion.yaml"
-    ),
-
-    dropbox_domain: classicalProvider(
-      "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Dropbox/Dropbox.yaml"
-    ),
 
     steam_domain: classicalProvider(
       "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Steam/Steam.yaml"
@@ -901,14 +795,6 @@ function main(config) {
 
     epic_domain: classicalProvider(
       "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Epic/Epic.yaml"
-    ),
-
-    disney_domain: classicalProvider(
-      "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Disney/Disney.yaml"
-    ),
-
-    primevideo_domain: classicalProvider(
-      "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/AmazonPrimeVideo/AmazonPrimeVideo.yaml"
     ),
 
     github_domain: domainProvider(
@@ -963,9 +849,6 @@ function main(config) {
       "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/bilibili.mrs"
     ),
 
-    bahamut_domain: domainProvider(
-      "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/bahamut.mrs"
-    ),
 
     cn_domain: domainProvider(
       "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/cn.mrs"
