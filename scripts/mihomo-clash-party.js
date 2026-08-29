@@ -562,10 +562,10 @@ function main(config) {
 
 
   // ===== 策略组图标 =====
-  // 图标全部托管在用户自己的 GitHub 仓库。
+  // 图标全部托管在用户自己的 GitHub 仓库，并通过 jsDelivr CDN 加速。
   // 仓库：https://github.com/love-iu520/substore-config
   var iconBase =
-    "https://raw.githubusercontent.com/love-iu520/substore-config/main/icons/";
+    "https://cdn.jsdelivr.net/gh/love-iu520/substore-config@main/icons/";
 
   var groupIcons = {
     "Proxy": iconBase + "Proxy.png",
