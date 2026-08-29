@@ -6,7 +6,8 @@ function main(config) {
   // - 保留：AI / Gemini / Google / YouTube 等核心分流、TUN、Sniffer、Fake-IP、双层 DNS。
   // - 保留：有住宅 SOCKS 时才显示“机场入口”；入口仅接受指定 🍃/🌏 + 美国/美國/香港 节点。
   // - 精简：移除 AnyTLS No-SNI 兼容补丁、自动 Chrome TLS 指纹、MetaCubeXD 下载、
-  //         find-process-mode、unified-delay，以及大量不再单独控制的低频 RULE-SET。
+  //         unified-delay，以及大量不再单独控制的低频 RULE-SET。
+  // - Antigravity：恢复 find-process-mode，仅用于进程兜底；Gemini / Google / AI 等域名规则仍优先。
   // - 图标：统一改为用户自己的 GitHub 仓库，避免第三方图标源变更。
   // - V16：规则模式 Global 改名为“国际”；显式增加 GLOBAL 全局模式选择器并使用独立图标。
 
@@ -332,6 +333,11 @@ function main(config) {
   config["allow-lan"] = false;
   config["tcp-concurrent"] = true;
   config["external-controller"] = "127.0.0.1:9090";
+
+  // 强制启用进程识别，仅用于后面的 Antigravity 漏网流量兜底。
+  // 具体 Gemini / Google / AI 等域名规则仍位于进程规则之前，因此会优先命中。
+  config["find-process-mode"] = "always";
+
   config.profile = {
     "store-selected": true,
     "store-fake-ip": true
@@ -702,6 +708,13 @@ function main(config) {
     "RULE-SET,tiktok_domain,TikTok",
     "RULE-SET,netflix_domain,Netflix",
     "RULE-SET,spotify_domain,Spotify",
+
+    // ===== Antigravity 漏网流量兜底 =====
+    // 前面的 Gemini / AI / Google / GitHub / YouTube 等具体服务规则优先。
+    // 只有未被这些规则识别的 Antigravity 流量才进入 Gemini，
+    // 从而避免落到国内直连或其它不合适的后续规则。
+    "PROCESS-NAME,Antigravity.exe,Gemini",
+    "PROCESS-PATH-WILDCARD,C:\\Users\\*\\AppData\\Local\\Programs\\Antigravity\\*,Gemini",
 
     // 国内软件。
     "RULE-SET,bilibili_domain,Bilibili",
