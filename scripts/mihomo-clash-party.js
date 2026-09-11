@@ -334,10 +334,6 @@ function main(config) {
   config["tcp-concurrent"] = true;
   config["external-controller"] = "127.0.0.1:9090";
 
-  // 强制启用进程识别，仅用于后面的 Antigravity 漏网流量兜底。
-  // 具体 Gemini / Google / AI 等域名规则仍位于进程规则之前，因此会优先命中。
-  config["find-process-mode"] = "always";
-
   config.profile = {
     "store-selected": true,
     "store-fake-ip": true
@@ -709,12 +705,6 @@ function main(config) {
     "RULE-SET,netflix_domain,Netflix",
     "RULE-SET,spotify_domain,Spotify",
 
-    // ===== Antigravity 漏网流量兜底 =====
-    // 前面的 Gemini / AI / Google / GitHub / YouTube 等具体服务规则优先。
-    // 只有未被这些规则识别的 Antigravity 流量才进入 Gemini，
-    // 从而避免落到国内直连或其它不合适的后续规则。
-    "PROCESS-NAME,Antigravity.exe,Gemini",
-    "PROCESS-PATH-WILDCARD,C:\\Users\\*\\AppData\\Local\\Programs\\Antigravity\\*,Gemini",
 
     // 国内软件。
     "RULE-SET,bilibili_domain,Bilibili",
